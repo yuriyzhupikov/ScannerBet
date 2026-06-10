@@ -1,0 +1,185 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ProviderSource {
+  id                    String                      @id @default(uuid()) @db.Uuid
+  sourceKey             String                      @unique @map("source_key")
+  type                  String
+  status                String
+  authorizationApproved Boolean                     @default(false) @map("authorization_approved")
+  secretRef             String?                     @map("secret_ref")
+  rateLimitPolicy       Json?                       @map("rate_limit_policy")
+  createdAt             DateTime                    @default(now()) @map("created_at")
+  updatedAt             DateTime                    @updatedAt @map("updated_at")
+  runs                  IngestionRun[]
+  rawPayloads           RawPayload[]
+  quoteSnapshots        QuoteSnapshot[]
+  normalizedQuotes      NormalizedQuote[]
+  mappings              ProviderInstrumentMapping[]
+  evidence              DiscrepancyEvidence[]
+
+  @@index([status])
+  @@map("provider_sources")
+}
+
+model Instrument {
+  id               String                      @id @default(uuid()) @db.Uuid
+  instrumentKey    String                      @unique @map("instrument_key")
+  displayName      String?                     @map("display_name")
+  createdAt        DateTime                    @default(now()) @map("created_at")
+  updatedAt        DateTime                    @updatedAt @map("updated_at")
+  mappings         ProviderInstrumentMapping[]
+  quoteSnapshots   QuoteSnapshot[]
+  normalizedQuotes NormalizedQuote[]
+  alerts           DiscrepancyAlert[]
+
+  @@map("instruments")
+}
+
+model ProviderInstrumentMapping {
+  id                    String         @id @default(uuid()) @db.Uuid
+  sourceId              String         @map("source_id") @db.Uuid
+  instrumentId          String         @map("instrument_id") @db.Uuid
+  providerInstrumentKey String         @map("provider_instrument_key")
+  displayName           String?        @map("display_name")
+  createdAt             DateTime       @default(now()) @map("created_at")
+  updatedAt             DateTime       @updatedAt @map("updated_at")
+  source                ProviderSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  instrument            Instrument     @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, providerInstrumentKey])
+  @@index([instrumentId])
+  @@map("provider_instrument_mappings")
+}
+
+model IngestionRun {
+  id            String         @id @default(uuid()) @db.Uuid
+  sourceId      String         @map("source_id") @db.Uuid
+  status        String
+  requestedAt   DateTime       @default(now()) @map("requested_at")
+  startedAt     DateTime?      @map("started_at")
+  finishedAt    DateTime?      @map("finished_at")
+  errorCode     String?        @map("error_code")
+  errorMessage  String?        @map("error_message")
+  correlationId String?        @map("correlation_id")
+  source        ProviderSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([sourceId, requestedAt])
+  @@index([status])
+  @@map("ingestion_runs")
+}
+
+model RawPayload {
+  id             String          @id @default(uuid()) @db.Uuid
+  sourceId       String          @map("source_id") @db.Uuid
+  rawHash        String          @map("raw_hash")
+  payloadRef     String          @map("payload_ref")
+  payload        Json
+  receivedAt     DateTime        @map("received_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  source         ProviderSource  @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  quoteSnapshots QuoteSnapshot[]
+
+  @@unique([sourceId, rawHash])
+  @@index([sourceId, receivedAt])
+  @@map("raw_payloads")
+}
+
+model QuoteSnapshot {
+  id              String           @id @default(uuid()) @db.Uuid
+  sourceId        String           @map("source_id") @db.Uuid
+  instrumentId    String           @map("instrument_id") @db.Uuid
+  rawPayloadId    String           @map("raw_payload_id") @db.Uuid
+  observedAt      DateTime         @map("observed_at")
+  numericValue    Decimal          @map("numeric_value") @db.Decimal(20, 8)
+  rawValue        Json             @map("raw_value")
+  rawHash         String           @map("raw_hash")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  source          ProviderSource   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  instrument      Instrument       @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  rawPayload      RawPayload       @relation(fields: [rawPayloadId], references: [id], onDelete: Cascade)
+  normalizedQuote NormalizedQuote?
+
+  @@unique([sourceId, instrumentId, observedAt, rawHash])
+  @@index([instrumentId, observedAt])
+  @@index([sourceId, observedAt])
+  @@map("quote_snapshots")
+}
+
+model NormalizedQuote {
+  id            String                  @id @default(uuid()) @db.Uuid
+  snapshotId    String                  @unique @map("snapshot_id") @db.Uuid
+  sourceId      String                  @map("source_id") @db.Uuid
+  instrumentId  String                  @map("instrument_id") @db.Uuid
+  observedAt    DateTime                @map("observed_at")
+  sourceTimestamp DateTime              @map("source_timestamp")
+  numericValue  Decimal                 @map("numeric_value") @db.Decimal(20, 8)
+  precision     Int
+  createdAt     DateTime                @default(now()) @map("created_at")
+  snapshot      QuoteSnapshot           @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  source        ProviderSource          @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  instrument    Instrument              @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  evidence      DiscrepancyEvidence[]
+
+  @@index([instrumentId, observedAt])
+  @@index([sourceId, observedAt])
+  @@map("normalized_quotes")
+}
+
+model DiscrepancyAlert {
+  id               String                 @id @default(uuid()) @db.Uuid
+  instrumentId     String                 @map("instrument_id") @db.Uuid
+  ruleKey          String                 @map("rule_key")
+  status           String
+  thresholdBps     Decimal                @map("threshold_bps") @db.Decimal(20, 8)
+  maxDifferenceBps Decimal                @map("max_difference_bps") @db.Decimal(20, 8)
+  openedAt         DateTime               @default(now()) @map("opened_at")
+  updatedAt        DateTime               @updatedAt @map("updated_at")
+  reviewedAt       DateTime?              @map("reviewed_at")
+  reviewerId       String?                @map("reviewer_id")
+  reviewNote       String?                @map("review_note")
+  instrument       Instrument             @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  evidence         DiscrepancyEvidence[]
+  auditEvents      AuditEvent[]
+
+  @@index([instrumentId, status, openedAt])
+  @@map("discrepancy_alerts")
+}
+
+model DiscrepancyEvidence {
+  id                String           @id @default(uuid()) @db.Uuid
+  alertId           String           @map("alert_id") @db.Uuid
+  normalizedQuoteId String           @map("normalized_quote_id") @db.Uuid
+  sourceId          String           @map("source_id") @db.Uuid
+  numericValue      Decimal          @map("numeric_value") @db.Decimal(20, 8)
+  observedAt        DateTime         @map("observed_at")
+  differenceBps     Decimal          @map("difference_bps") @db.Decimal(20, 8)
+  createdAt         DateTime         @default(now()) @map("created_at")
+  alert             DiscrepancyAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  normalizedQuote   NormalizedQuote  @relation(fields: [normalizedQuoteId], references: [id], onDelete: Cascade)
+  source            ProviderSource   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([alertId])
+  @@index([normalizedQuoteId])
+  @@map("discrepancy_evidence")
+}
+
+model AuditEvent {
+  id        String            @id @default(uuid()) @db.Uuid
+  alertId   String?           @map("alert_id") @db.Uuid
+  actorId   String            @map("actor_id")
+  action    String
+  metadata  Json?
+  createdAt DateTime          @default(now()) @map("created_at")
+  alert     DiscrepancyAlert? @relation(fields: [alertId], references: [id], onDelete: SetNull)
+
+  @@index([alertId, createdAt])
+  @@map("audit_events")
+}
+
