@@ -14,6 +14,9 @@ import { DiscrepanciesController } from './interfaces/http/controllers/discrepan
 import { HealthController } from './interfaces/http/controllers/health.controller';
 import { IngestionController } from './interfaces/http/controllers/ingestion.controller';
 import { MetricsController } from './interfaces/http/controllers/metrics.controller';
+import { LatestQuotesController } from './interfaces/http/controllers/latest-quotes.controller';
+import { SignalsController } from './interfaces/http/controllers/signals.controller';
+import { SourceIngestionController } from './interfaces/http/controllers/source-ingestion.controller';
 import { QuotesController } from './interfaces/http/controllers/quotes.controller';
 import { SourcesController } from './interfaces/http/controllers/sources.controller';
 
@@ -36,6 +39,9 @@ import { SourcesController } from './interfaces/http/controllers/sources.control
     IngestionController,
     QuotesController,
     DiscrepanciesController,
+    SourceIngestionController,
+    LatestQuotesController,
+    SignalsController,
   ],
 })
 export class AppModule implements NestModule {
@@ -43,4 +49,3 @@ export class AppModule implements NestModule {
     consumer.apply(CorrelationIdMiddleware).forRoutes('*');
   }
 }
-

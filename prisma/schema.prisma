@@ -13,8 +13,20 @@ model ProviderSource {
   type                  String
   status                String
   authorizationApproved Boolean                     @default(false) @map("authorization_approved")
+  baseUrl               String?                     @map("base_url")
+  allowedHosts          String[]                    @default([]) @map("allowed_hosts")
+  authType              String                      @default("API_KEY") @map("auth_type")
   secretRef             String?                     @map("secret_ref")
+  rateLimitPerMinute    Int                         @default(60) @map("rate_limit_per_minute")
+  timeoutMs             Int                         @default(3000) @map("timeout_ms")
+  staleAfterMs          Int                         @default(15000) @map("stale_after_ms")
+  cursor                String?
   rateLimitPolicy       Json?                       @map("rate_limit_policy")
+  lastSuccessAt         DateTime?                   @map("last_success_at")
+  lastFailureAt         DateTime?                   @map("last_failure_at")
+  lastFailureCode       String?                     @map("last_failure_code")
+  consecutiveErrors     Int                         @default(0) @map("consecutive_errors")
+  lagMs                 Int?                        @map("lag_ms")
   createdAt             DateTime                    @default(now()) @map("created_at")
   updatedAt             DateTime                    @updatedAt @map("updated_at")
   runs                  IngestionRun[]
@@ -25,6 +37,7 @@ model ProviderSource {
   evidence              DiscrepancyEvidence[]
 
   @@index([status])
+  @@index([type, status])
   @@map("provider_sources")
 }
 
@@ -80,6 +93,10 @@ model RawPayload {
   sourceId       String          @map("source_id") @db.Uuid
   rawHash        String          @map("raw_hash")
   payloadRef     String          @map("payload_ref")
+  externalBatchId String?        @map("external_batch_id")
+  idempotencyKey String?         @map("idempotency_key")
+  status         String          @default("RECEIVED")
+  rejectionCode  String?         @map("rejection_code")
   payload        Json
   receivedAt     DateTime        @map("received_at")
   createdAt      DateTime        @default(now()) @map("created_at")
@@ -87,7 +104,9 @@ model RawPayload {
   quoteSnapshots QuoteSnapshot[]
 
   @@unique([sourceId, rawHash])
+  @@unique([sourceId, idempotencyKey])
   @@index([sourceId, receivedAt])
+  @@index([status, receivedAt])
   @@map("raw_payloads")
 }
 
@@ -117,6 +136,11 @@ model NormalizedQuote {
   snapshotId    String                  @unique @map("snapshot_id") @db.Uuid
   sourceId      String                  @map("source_id") @db.Uuid
   instrumentId  String                  @map("instrument_id") @db.Uuid
+  externalId    String?                 @map("external_id")
+  instrumentKey String?                 @map("instrument_key")
+  dimensionKey  String?                 @map("dimension_key")
+  labelKey      String?                 @map("label_key")
+  quoteHash     String?                 @map("quote_hash")
   observedAt    DateTime                @map("observed_at")
   sourceTimestamp DateTime              @map("source_timestamp")
   numericValue  Decimal                 @map("numeric_value") @db.Decimal(20, 8)
@@ -129,7 +153,31 @@ model NormalizedQuote {
 
   @@index([instrumentId, observedAt])
   @@index([sourceId, observedAt])
+  @@index([instrumentKey, dimensionKey, labelKey, observedAt])
+  @@index([sourceId, externalId])
+  @@unique([sourceId, quoteHash])
   @@map("normalized_quotes")
+}
+
+model Signal {
+  id            String    @id @default(uuid()) @db.Uuid
+  instrumentKey String    @map("instrument_key")
+  dimensionKey  String    @map("dimension_key")
+  labelKey      String    @map("label_key")
+  minQuoteId    String    @map("min_quote_id") @db.Uuid
+  maxQuoteId    String    @map("max_quote_id") @db.Uuid
+  minValue      Decimal   @map("min_value") @db.Decimal(20, 8)
+  maxValue      Decimal   @map("max_value") @db.Decimal(20, 8)
+  spreadPct     Decimal   @map("spread_pct") @db.Decimal(20, 8)
+  thresholdPct  Decimal   @map("threshold_pct") @db.Decimal(20, 8)
+  status        String    @default("OPEN")
+  detectedAt    DateTime  @default(now()) @map("detected_at")
+  closedAt      DateTime? @map("closed_at")
+
+  @@unique([instrumentKey, dimensionKey, labelKey, minQuoteId, maxQuoteId, status])
+  @@index([instrumentKey, dimensionKey, labelKey, detectedAt])
+  @@index([status, detectedAt])
+  @@map("signals")
 }
 
 model DiscrepancyAlert {
@@ -182,4 +230,3 @@ model AuditEvent {
   @@index([alertId, createdAt])
   @@map("audit_events")
 }
-

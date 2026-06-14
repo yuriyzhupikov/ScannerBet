@@ -10,7 +10,11 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   app.useLogger(app.get(JsonLogger));
   app.setGlobalPrefix('v1', {
-    exclude: ['health', 'metrics'],
+    exclude: [
+      'health',
+      'ready',
+      'metrics',
+    ],
   });
   app.useGlobalPipes(
     new ValidationPipe({
@@ -34,4 +38,3 @@ async function bootstrap(): Promise<void> {
 }
 
 void bootstrap();
-

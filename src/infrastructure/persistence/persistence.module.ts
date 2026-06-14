@@ -5,6 +5,7 @@ import { DiscrepancyAlertRepository } from './repositories/discrepancy-alert.rep
 import { IngestionRunRepository } from './repositories/ingestion-run.repository';
 import { ProviderSourceRepository } from './repositories/provider-source.repository';
 import { QuoteRepository } from './repositories/quote.repository';
+import { SignalRepository } from './repositories/signal.repository';
 import { SystemRepository } from './repositories/system.repository';
 
 const repositories = [
@@ -12,6 +13,7 @@ const repositories = [
   IngestionRunRepository,
   QuoteRepository,
   DiscrepancyAlertRepository,
+  SignalRepository,
   SystemRepository,
 ];
 

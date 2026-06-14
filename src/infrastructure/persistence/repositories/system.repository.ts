@@ -18,19 +18,19 @@ export class SystemRepository {
   }
 
   async getMetricsCounts(): Promise<MetricsCounts> {
-    const [sources, snapshots, normalizedQuotes, openAlerts] = await Promise.all([
+    const [sources, snapshots, normalizedQuotes, openAlerts, openSignals] = await Promise.all([
       this.prisma.providerSource.count(),
       this.prisma.quoteSnapshot.count(),
       this.prisma.normalizedQuote.count(),
       this.prisma.discrepancyAlert.count({ where: { status: 'OPEN' } }),
+      this.prisma.signal.count({ where: { status: 'OPEN' } }),
     ]);
 
     return {
       sources,
       snapshots,
       normalizedQuotes,
-      openAlerts,
+      openAlerts: openAlerts + openSignals,
     };
   }
 }
-

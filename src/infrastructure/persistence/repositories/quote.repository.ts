@@ -8,6 +8,8 @@ export type RawPayloadRecordInput = {
   rawHash: string;
   payloadRef: string;
   receivedAt: Date;
+  idempotencyKey?: string;
+  status?: string;
   payload: Record<string, unknown>;
 };
 
@@ -37,6 +39,11 @@ export type NormalizedQuoteRecordInput = {
   snapshotId: string;
   sourceId: string;
   instrumentId: string;
+  externalId?: string;
+  instrumentKey?: string;
+  dimensionKey?: string;
+  labelKey?: string;
+  quoteHash?: string;
   observedAt: Date;
   sourceTimestamp: Date;
   numericValue: string;
@@ -46,6 +53,12 @@ export type NormalizedQuoteRecordInput = {
 export type ListQuoteSnapshotsFilter = {
   instrumentKey?: string;
   sourceId?: string;
+  take: number;
+};
+
+export type LatestQuoteFilter = {
+  instrumentKey?: string;
+  dimensionKey?: string;
   take: number;
 };
 
@@ -73,6 +86,37 @@ export class QuoteRepository {
   }
 
   upsertRawPayload(input: RawPayloadRecordInput) {
+    if (input.idempotencyKey) {
+      return this.prisma.rawPayload
+        .findFirst({
+          where: {
+            sourceId: input.sourceId,
+            idempotencyKey: input.idempotencyKey,
+          },
+        })
+        .then((existing) => {
+          if (existing) {
+            return existing;
+          }
+
+          return this.upsertRawPayloadByHash(input);
+        });
+    }
+
+    return this.upsertRawPayloadByHash(input);
+  }
+
+  updateRawPayloadStatus(id: string, status: string, rejectionCode?: string) {
+    return this.prisma.rawPayload.update({
+      where: { id },
+      data: {
+        status,
+        rejectionCode,
+      },
+    });
+  }
+
+  private upsertRawPayloadByHash(input: RawPayloadRecordInput) {
     return this.prisma.rawPayload.upsert({
       where: {
         sourceId_rawHash: {
@@ -82,11 +126,14 @@ export class QuoteRepository {
       },
       update: {
         receivedAt: input.receivedAt,
+        status: input.status ?? 'RECEIVED',
       },
       create: {
         sourceId: input.sourceId,
         rawHash: input.rawHash,
         payloadRef: input.payloadRef,
+        idempotencyKey: input.idempotencyKey ?? input.rawHash,
+        status: input.status ?? 'RECEIVED',
         receivedAt: input.receivedAt,
         payload: input.payload as Prisma.InputJsonValue,
       },
@@ -141,10 +188,21 @@ export class QuoteRepository {
     }
   }
 
+  async createNormalizedQuoteOrNull(input: NormalizedQuoteRecordInput) {
+    try {
+      return await this.prisma.normalizedQuote.create({
+        data: input,
+      });
+    } catch (error) {
+      if (this.isUniqueConstraint(error)) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
   createNormalizedQuote(input: NormalizedQuoteRecordInput) {
-    return this.prisma.normalizedQuote.create({
-      data: input,
-    });
+    return this.createNormalizedQuoteOrNull(input);
   }
 
   listSnapshots(filter: ListQuoteSnapshotsFilter) {
@@ -168,6 +226,47 @@ export class QuoteRepository {
     });
   }
 
+  listLatestCanonical(filter: LatestQuoteFilter) {
+    return this.prisma.normalizedQuote.findMany({
+      where: {
+        instrumentKey: filter.instrumentKey,
+        dimensionKey: filter.dimensionKey,
+      },
+      orderBy: {
+        observedAt: 'desc',
+      },
+      take: filter.take,
+      include: {
+        source: true,
+        instrument: true,
+      },
+    });
+  }
+
+  findRecentCanonicalForGroups(
+    groups: Array<{ instrumentKey: string; dimensionKey: string; labelKey: string }>,
+    since: Date,
+  ) {
+    if (groups.length === 0) {
+      return Promise.resolve([]);
+    }
+
+    return this.prisma.normalizedQuote.findMany({
+      where: {
+        observedAt: { gte: since },
+        OR: groups.map((group) => ({
+          instrumentKey: group.instrumentKey,
+          dimensionKey: group.dimensionKey,
+          labelKey: group.labelKey,
+        })),
+      },
+      orderBy: [{ observedAt: 'desc' }],
+      include: {
+        source: true,
+      },
+    });
+  }
+
   private isUniqueConstraint(error: unknown): boolean {
     return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
   }
@@ -176,4 +275,3 @@ export class QuoteRepository {
     return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
   }
 }
-

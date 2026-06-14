@@ -9,7 +9,13 @@ export type CreateProviderSourceRecord = {
   type: ProviderSourceType;
   status: ProviderSourceStatus;
   authorizationApproved: boolean;
+  baseUrl?: string;
+  allowedHosts?: string[];
+  authType?: string;
   secretRef?: string;
+  rateLimitPerMinute?: number;
+  timeoutMs?: number;
+  staleAfterMs?: number;
   rateLimitPolicy?: Record<string, unknown>;
 };
 
@@ -24,9 +30,21 @@ export class ProviderSourceRepository {
         type: input.type,
         status: input.status,
         authorizationApproved: input.authorizationApproved,
+        baseUrl: input.baseUrl,
+        allowedHosts: input.allowedHosts ?? [],
+        authType: input.authType ?? 'API_KEY',
         secretRef: input.secretRef,
+        rateLimitPerMinute: input.rateLimitPerMinute ?? 60,
+        timeoutMs: input.timeoutMs ?? 3000,
+        staleAfterMs: input.staleAfterMs ?? 15000,
         rateLimitPolicy: input.rateLimitPolicy as Prisma.InputJsonValue | undefined,
       },
+    });
+  }
+
+  findBySourceKey(sourceKey: string) {
+    return this.prisma.providerSource.findUnique({
+      where: { sourceKey },
     });
   }
 
@@ -65,5 +83,34 @@ export class ProviderSourceRepository {
       },
     });
   }
-}
 
+  updateCursor(sourceId: string, cursor?: string | null) {
+    return this.prisma.providerSource.update({
+      where: { id: sourceId },
+      data: { cursor },
+    });
+  }
+
+  markSuccess(sourceId: string, lagMs?: number | null) {
+    return this.prisma.providerSource.update({
+      where: { id: sourceId },
+      data: {
+        lastSuccessAt: new Date(),
+        lastFailureCode: null,
+        consecutiveErrors: 0,
+        lagMs,
+      },
+    });
+  }
+
+  markFailure(sourceId: string, failureCode: string) {
+    return this.prisma.providerSource.update({
+      where: { id: sourceId },
+      data: {
+        lastFailureAt: new Date(),
+        lastFailureCode: failureCode,
+        consecutiveErrors: { increment: 1 },
+      },
+    });
+  }
+}

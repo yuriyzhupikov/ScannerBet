@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsIn, IsObject, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, IsUrl, Matches, Max, MaxLength, Min } from 'class-validator';
 
 import { PROVIDER_SOURCE_STATUSES, PROVIDER_SOURCE_TYPES, ProviderSourceStatus, ProviderSourceType } from '../../../domain/catalog/provider-source.entity';
 
@@ -24,11 +24,49 @@ export class CreateProviderSourceDto {
   @IsBoolean()
   authorizationApproved?: boolean;
 
+  @ApiPropertyOptional({ example: 'https://partner-a.internal.example' })
+  @IsOptional()
+  @IsUrl({ require_tld: false, require_protocol: true })
+  baseUrl?: string;
+
+  @ApiPropertyOptional({ example: ['partner-a.internal.example'] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  allowedHosts?: string[];
+
+  @ApiPropertyOptional({ default: 'API_KEY' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  authType?: string;
+
   @ApiPropertyOptional({ description: 'Reference to a secret manager entry. Never submit raw credentials.' })
   @IsOptional()
   @IsString()
   @MaxLength(240)
   secretRef?: string;
+
+  @ApiPropertyOptional({ default: 60 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100000)
+  rateLimitPerMinute?: number;
+
+  @ApiPropertyOptional({ default: 3000 })
+  @IsOptional()
+  @IsInt()
+  @Min(100)
+  @Max(120000)
+  timeoutMs?: number;
+
+  @ApiPropertyOptional({ default: 15000 })
+  @IsOptional()
+  @IsInt()
+  @Min(1000)
+  @Max(86400000)
+  staleAfterMs?: number;
 
   @ApiPropertyOptional()
   @IsOptional()

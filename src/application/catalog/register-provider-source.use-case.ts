@@ -9,7 +9,13 @@ export type RegisterProviderSourceCommand = {
   type: ProviderSourceType;
   status?: ProviderSourceStatus;
   authorizationApproved?: boolean;
+  baseUrl?: string;
+  allowedHosts?: string[];
+  authType?: string;
   secretRef?: string;
+  rateLimitPerMinute?: number;
+  timeoutMs?: number;
+  staleAfterMs?: number;
   rateLimitPolicy?: Record<string, unknown>;
 };
 
@@ -35,7 +41,13 @@ export class RegisterProviderSourceUseCase {
       type: command.type,
       status,
       authorizationApproved,
+      baseUrl: command.baseUrl,
+      allowedHosts: command.allowedHosts,
+      authType: command.authType,
       secretRef: command.secretRef,
+      rateLimitPerMinute: command.rateLimitPerMinute,
+      timeoutMs: command.timeoutMs,
+      staleAfterMs: command.staleAfterMs,
       rateLimitPolicy: command.rateLimitPolicy,
     });
   }

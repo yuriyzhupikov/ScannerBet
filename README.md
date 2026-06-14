@@ -26,7 +26,8 @@ curl http://localhost:3000/metrics
 
 Swagger доступен по адресу `http://localhost:3000/docs`.
 
-Полный пример использования описан в [docs/usage.md](docs/usage.md).
+Полный пример использования MVP описан в [docs/usage.md](docs/usage.md).
+Поток авторизованных REST/Webhook источников описан в [docs/authorized-market-data.md](docs/authorized-market-data.md).
 
 ## Минимальный сценарий
 
@@ -103,6 +104,16 @@ APP_ENV_FILE=.env.example docker compose config --quiet
 - `PATCH /v1/discrepancies/:id/review`
 - `GET /docs`
 
+## API авторизованных источников
+
+- `GET /health`
+- `GET /ready`
+- `POST /v1/sources/:sourceKey/pull`
+- `POST /v1/ingest/webhook/:sourceKey`
+- `GET /v1/quotes/latest?instrumentKey=&dimensionKey=`
+- `GET /v1/signals?status=OPEN`
+- `POST /v1/signals/:id/ignore`
+
 Mutation endpoints защищены `x-api-token`, если задан `ADMIN_API_TOKEN`. В production без `ADMIN_API_TOKEN` mutations отклоняются.
 
 ## Безопасные источники
@@ -124,5 +135,6 @@ Mutation endpoints защищены `x-api-token`, если задан `ADMIN_AP
 - `QuoteRepository` - raw payloads, instruments, snapshots, normalized quotes;
 - `DiscrepancyAlertRepository` - alerts, evidence, review/audit transaction;
 - `SystemRepository` - health и metrics counts.
+- `SignalRepository` - spread signals.
 
 Если нужен новый запрос к БД, добавляйте метод в соответствующий repository и инжектите repository в use case/controller. Не добавляйте `PrismaService` в application или interfaces слои.
